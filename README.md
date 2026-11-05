@@ -1,5 +1,7 @@
 # Bill-Free API
 
+Want it online fast? Follow **DEPLOY.md** (Render, uses `render.yaml`).
+
 Node 18+ / Express / Postgres / Paystack. Real accounts, real ledger, real deposits via Paystack dedicated virtual accounts.
 
 ## Run it

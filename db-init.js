@@ -1,16 +1,14 @@
+// Creates or updates all tables. Safe to run as many times as you like.
+// Works without psql: it only needs DATABASE_URL and the "pg" package.
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
+const fs = require('fs'), path = require('path');
 const { Pool } = require('pg');
-if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false }
-});
+if (!process.env.DATABASE_URL) { console.error('DATABASE_URL is not set'); process.exit(1); }
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 (async () => {
   try {
-    const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-    await pool.query(schema);
-    console.log('Bill-Free database schema initialized.');
-  } finally { await pool.end(); }
-})().catch(err => { console.error(err); process.exit(1); });
+    await pool.query(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
+    console.log('Database is ready.');
+  } catch (e) { console.error('Database setup failed:', e.message); process.exitCode = 1; }
+  finally { await pool.end(); }
+})();
