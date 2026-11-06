@@ -2,7 +2,8 @@ require('dotenv').config();
 const express = require('express'), helmet = require('helmet'), cors = require('cors'), rate = require('express-rate-limit');
 const { Pool } = require('pg'), bcrypt = require('bcryptjs'), jwt = require('jsonwebtoken'), crypto = require('crypto');
 const { DATABASE_URL, JWT_SECRET, PAYSTACK_SECRET, PORT = 3000, WITHDRAW_FEE_PCT = '1', PREFERRED_BANK = 'wema-bank', APP_ORIGIN } = process.env;
-if (!DATABASE_URL || !JWT_SECRET || !PAYSTACK_SECRET) throw new Error('Set DATABASE_URL, JWT_SECRET and PAYSTACK_SECRET');
+if (!DATABASE_URL || !JWT_SECRET) throw new Error('Set DATABASE_URL and JWT_SECRET');
+const DEMO_MODE = process.env.DEMO_MODE !== 'false';
 
 const db = new Pool({ connectionString: DATABASE_URL });
 const app = express();
@@ -12,6 +13,14 @@ app.use(helmet({ contentSecurityPolicy: { useDefaults: true, directives: { 'scri
 app.use(cors({ origin: APP_ORIGIN || false }));
 app.use(express.json({ limit: '50kb', verify: (req, _res, buf) => { req.raw = buf; } }));
 app.use(express.static('public'));
+// Public preview mode: allow the website and health check, but block account creation,
+// sign-in, money movement, lending, savings contributions and other state changes.
+app.use((req, res, next) => {
+  if (DEMO_MODE && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.path !== '/contact') {
+    return res.status(503).json({ error: 'This public preview is read-only. Financial and account actions are disabled.' });
+  }
+  next();
+});
 
 const naira = k => Number(k) / 100;
 const toKobo = n => Math.round(Number(n) * 100);
@@ -23,6 +32,7 @@ const wrap = f => (req, res) => f(req, res).catch(e => {
   console.error(e); res.status(500).json({ error: 'Something went wrong' });
 });
 const ps = async (path, method = 'GET', body) => {
+  if (!PAYSTACK_SECRET) throw new Error('Paystack is disabled in demo mode');
   const r = await fetch('https://api.paystack.co' + path, { method, headers: { Authorization: 'Bearer ' + PAYSTACK_SECRET, 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) });
   const j = await r.json(); if (!j.status) throw new Error(j.message || 'Paystack error'); return j.data;
 };
